@@ -331,50 +331,24 @@ function pbInsertLeadReport(
     $stmt->close();
 }
 
-function pbClickRecordExists(mysqli $link, string $clickId, string $conversionDate): bool
+function pbUpsertClickRecord(mysqli $link, string $clickId, string $payout, string $conversionDate): void
 {
-    $stmt = pbPrepare(
-        $link,
-        'SELECT id FROM clickrecord WHERE click_id = ? AND click_date = ? LIMIT 1'
-    );
-
-    $stmt->bind_param('ss', $clickId, $conversionDate);
-
-    if (!$stmt->execute()) {
-        pbLog('select_clickrecord_failed', [
-            'errno' => $stmt->errno,
-            'error' => $stmt->error,
-        ]);
-
-        $stmt->close();
-        pbRespond(500, 'SERVER_ERROR');
-    }
-
-    $stmt->store_result();
-    $exists = $stmt->num_rows > 0;
-    $stmt->free_result();
-    $stmt->close();
-
-    return $exists;
-}
-
-function pbInsertClickRecord(mysqli $link, string $clickId, string $payout, string $conversionDate): void
-{
-    $clicks = 1;
-    $leads = 1;
-
     $stmt = pbPrepare(
         $link,
         'INSERT INTO clickrecord
             (click_id, clicks, leads, payout, click_date)
          VALUES
-            (?, ?, ?, ?, ?)'
+            (?, 1, 1, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            clicks = clicks + 1,
+            leads = CAST(leads AS UNSIGNED) + 1,
+            payout = CAST(payout AS DECIMAL(18,2)) + CAST(VALUES(payout) AS DECIMAL(18,2))'
     );
 
-    $stmt->bind_param('siiss', $clickId, $clicks, $leads, $payout, $conversionDate);
+    $stmt->bind_param('sss', $clickId, $payout, $conversionDate);
 
     if (!$stmt->execute()) {
-        pbLog('insert_clickrecord_failed', [
+        pbLog('upsert_clickrecord_failed', [
             'errno' => $stmt->errno,
             'error' => $stmt->error,
         ]);
@@ -386,31 +360,52 @@ function pbInsertClickRecord(mysqli $link, string $clickId, string $payout, stri
     $stmt->close();
 }
 
-function pbUpdateClickRecord(mysqli $link, string $clickId, string $payout, string $conversionDate): void
+function pbEnsureClickRecordUniqueIndex(mysqli $link): void
 {
+    $database = $link->query('SELECT DATABASE() AS db_name');
+
+    if (!$database instanceof mysqli_result) {
+        pbLog('read_database_name_failed', ['errno' => $link->errno, 'error' => $link->error]);
+        pbRespond(500, 'SERVER_ERROR');
+    }
+
+    $row = $database->fetch_assoc();
+    $database->free();
+    $dbName = isset($row['db_name']) ? (string) $row['db_name'] : '';
+
+    if ($dbName === '') {
+        pbLog('database_name_empty');
+        pbRespond(500, 'SERVER_ERROR');
+    }
+
+    $indexName = 'ux_clickrecord_click_id_date';
+    $tableName = 'clickrecord';
+
     $stmt = pbPrepare(
         $link,
-        'UPDATE clickrecord
-            SET clicks = clicks + 1,
-                leads = leads + 1,
-                payout = payout + CAST(? AS DECIMAL(18,2))
-          WHERE click_id = ?
-            AND click_date = ?'
+        'SELECT COUNT(*) FROM information_schema.statistics
+         WHERE table_schema = ? AND table_name = ? AND index_name = ?'
     );
-
-    $stmt->bind_param('sss', $payout, $clickId, $conversionDate);
+    $stmt->bind_param('sss', $dbName, $tableName, $indexName);
 
     if (!$stmt->execute()) {
-        pbLog('update_clickrecord_failed', [
-            'errno' => $stmt->errno,
-            'error' => $stmt->error,
-        ]);
-
+        pbLog('check_unique_index_failed', ['errno' => $stmt->errno, 'error' => $stmt->error]);
         $stmt->close();
         pbRespond(500, 'SERVER_ERROR');
     }
 
+    $stmt->bind_result($count);
+    $stmt->fetch();
     $stmt->close();
+
+    if ((int) $count > 0) {
+        return;
+    }
+
+    if (!$link->query('ALTER TABLE clickrecord ADD UNIQUE KEY ux_clickrecord_click_id_date (click_id, click_date)')) {
+        pbLog('create_unique_index_failed', ['errno' => $link->errno, 'error' => $link->error]);
+        pbRespond(500, 'SERVER_ERROR');
+    }
 }
 
 pbRejectSuspiciousRequest();
@@ -468,11 +463,8 @@ try {
         $traffic
     );
 
-    if (pbClickRecordExists($link, $clickId, $conversionDate)) {
-        pbUpdateClickRecord($link, $clickId, $payout, $conversionDate);
-    } else {
-        pbInsertClickRecord($link, $clickId, $payout, $conversionDate);
-    }
+    pbEnsureClickRecordUniqueIndex($link);
+    pbUpsertClickRecord($link, $clickId, $payout, $conversionDate);
 
     if ($transactionStarted) {
         $link->commit();
