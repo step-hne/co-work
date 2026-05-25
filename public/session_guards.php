@@ -13,6 +13,27 @@ if (!function_exists('guardIsHttpsRequest')) {
     }
 }
 
+
+if (!function_exists('applySecurityHeaders')) {
+    function applySecurityHeaders(): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        header('X-Content-Type-Options: nosniff');
+        header('X-Frame-Options: SAMEORIGIN');
+        header('Referrer-Policy: strict-origin-when-cross-origin');
+        header('Permissions-Policy: geolocation=(), camera=(), microphone=()');
+
+        if (guardIsHttpsRequest()) {
+            header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+        }
+    }
+}
+
+applySecurityHeaders();
+
 if (!function_exists('startNamedGuardSession')) {
     function startNamedGuardSession(string $name): void
     {
