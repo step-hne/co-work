@@ -550,6 +550,13 @@ input:focus,textarea:focus,select:focus,button:focus,.form-control:focus,.btn:fo
                                 <label for="salary" class="control-label">Domain Name:</label>
                                 <input type="text" placeholder="{example.com}" class="form-control" id="domain" name="domain" required="true" autofocus/>
                             </div>
+                            <div class="form-group">
+                                <label for="auto_cloudflare" class="control-label">Cloudflare Provisioning:</label>
+                                <select id="auto_cloudflare" name="auto_cloudflare" class="form-control">
+                                    <option value="1" selected="selected">Auto cPanel + Cloudflare</option>
+                                    <option value="0">cPanel only</option>
+                                </select>
+                            </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
@@ -949,11 +956,12 @@ input:focus,textarea:focus,select:focus,button:focus,.form-control:focus,.btn:fo
 
         function ajaxAction(action) {
             var addon = $('#domain').val().trim();
+            var autoCloudflare = $('#auto_cloudflare').val() === '1';
             var data = $("#frm_" + action).serializeArray();
             $.ajax({
                 type: 'POST', url: 'response.php',
                 data: data, dataType: 'json',
-                success: function() {
+                success: function(resp) {
                     $('#' + action + '_model').modal('hide');
                     loadData();
                     if (action === 'add' && addon !== '') {
@@ -962,6 +970,10 @@ input:focus,textarea:focus,select:focus,button:focus,.form-control:focus,.btn:fo
                             .done(function(res) {
                                 if (res && res.ok) {
                                     showToast('success', 'cPanel Synced', addon);
+                                    if (autoCloudflare && resp && resp.id) {
+                                        showToast('info', 'Cloudflare Sync…', addon);
+                                        cfSync(resp.id, addon);
+                                    }
                                 } else {
                                     showToast('error', 'cPanel Sync Failed', (res && res.err) || addon);
                                 }
@@ -1041,6 +1053,7 @@ input:focus,textarea:focus,select:focus,button:focus,.form-control:focus,.btn:fo
 
         $("#command-add").on('click', function() {
             $("#domain").val('');
+            $("#auto_cloudflare").val('1');
             loadCpanelNs();
             $('#add_model').modal('show');
         });

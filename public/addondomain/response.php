@@ -140,9 +140,10 @@ function adminDomainInsert(mysqli $conn, array $params): void
     }
     bindStatementValues($stmt, 'ss', [$subDomain, $domain]);
     mysqli_stmt_execute($stmt);
+    $insertedId = mysqli_insert_id($conn);
     mysqli_stmt_close($stmt);
 
-    echo json_encode(['ok' => true]);
+    echo json_encode(['ok' => true, 'id' => $insertedId]);
 }
 
 function adminDomainUpdate(mysqli $conn, array $params): void
