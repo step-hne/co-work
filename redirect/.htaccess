@@ -1,0 +1,85 @@
+# ─── Security: deny sensitive files ──────────────────────────────────────────
+<FilesMatch "^(\.env|\.env\..*|env\.php|connection\.config\.php|redirect_payload\.php|public_link\.php|ip_address\.php|Base64URL\.php|Mobile_Detect\.php|phpstan.*|composer\.(json|lock)|robots-stage\.txt)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Block dot-files (except .htaccess itself)
+<FilesMatch "^\.(?!htaccess)">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order deny,allow
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Block vendor directory from web access
+<IfModule mod_rewrite.c>
+    RewriteRule ^vendor/ - [F,L]
+    RewriteRule ^dist/ - [F,L]
+    RewriteRule ^databases/ - [F,L]
+    RewriteRule ^cgi-bin/ - [F,L]
+</IfModule>
+
+# ─── API routing ──────────────────────────────────────────────────────────────
+# Route clean URL /api/shorten → api/shorten.php
+<IfModule mod_rewrite.c>
+    RewriteRule ^api/shorten/?$ api/shorten.php [QSA,L]
+</IfModule>
+
+# ─── Security headers ─────────────────────────────────────────────────────────
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+    Header always set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "0"
+
+    # Remove server signature headers
+    Header always unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# imgp.php must be publicly cacheable for Facebook/social scrapers to load images
+<Files "imgp.php">
+    <IfModule mod_headers.c>
+        Header always unset Cache-Control
+        Header always unset Pragma
+        Header always unset Expires
+        Header always set Cache-Control "public, max-age=86400, immutable"
+    </IfModule>
+</Files>
+
+# ─── Rewrite rules ────────────────────────────────────────────────────────────
+RewriteEngine On
+
+# Block direct access to PHP library/config files
+RewriteRule ^(env|connection\.config|redirect_payload|public_link|ip_address|Base64URL|Mobile_Detect|phpstan-bootstrap|generate-short-link|shorten-client|update-geoip)\.php$ - [F,L]
+
+# Pass real files and directories through
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Route image proxy clean URL
+RewriteRule ^imgp/?$ imgp.php [QSA,L]
+
+# Route TOKEN → index.php?sub_id=TOKEN
+RewriteRule ^([a-zA-Z0-9_-]{1,2048})$ index.php?sub_id=$1 [QSA,NC,L]
+RewriteRule ^([a-zA-Z0-9_-]{1,2048})/$ index.php?sub_id=$1 [QSA,NC,L]
+
+# php -- BEGIN cPanel-generated handler, do not edit
+# Set the “ea-php83” package as the default “PHP” programming language.
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php83 .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit

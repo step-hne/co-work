@@ -1,0 +1,25 @@
+{
+    "name": "Genv2/redirect",
+    "description": "SRP redirect engine",
+    "type": "project",
+    "require": {
+        "php": "^8.3",
+        "geoip2/geoip2": "^3.3"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^11.5",
+        "friendsofphp/php-cs-fixer": "^3.95",
+        "squizlabs/php_codesniffer": "^3.13"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "platform": {
+            "php": "8.3.0"
+        }
+    },
+    "autoload": {
+        "classmap": []
+    }
+}
