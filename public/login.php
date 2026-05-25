@@ -131,8 +131,8 @@ header(
 );
 
 if (isset($_GET['help'])) {
-    $self = str_replace('\\', '\\\\', __FILE__);
-    exit('Include following code into every page you would like to protect, at the very beginning (first line):<br>&lt;?php include("' . $self . '"); ?&gt;');
+    http_response_code(404);
+    exit('Not Found');
 }
 
 if (isset($_GET['logout'])) {
