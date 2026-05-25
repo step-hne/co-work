@@ -41,7 +41,6 @@ try {
         'csrf_token' => $csrfToken,
     ];
     $headers = [
-        'Host: ' . $_SERVER['HTTP_HOST'],
         'X-CSRF-Token: ' . $csrfToken,
         'Cookie: ' . session_name() . '=' . session_id(),
     ];
@@ -59,17 +58,23 @@ try {
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     $result = curl_exec($curl);
+    $httpStatus = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($curl);
+    curl_close($curl);
 
     if ($result === false) {
-        jsonError(502, 'cpanel-request-failed');
+        jsonError(502, 'cpanel-request-failed:' . $curlError);
     }
 
-    echo json_encode([
-        [
-            'domain' => $domain,
-            'userid' => $userid,
-        ],
-    ]);
+    $decodedResult = json_decode((string) $result, true);
+    if (!is_array($decodedResult)) {
+        jsonError(502, 'cpanel-invalid-response');
+    }
+    if ($httpStatus >= 400) {
+        jsonError(502, 'cpanel-error-status-' . (string) $httpStatus);
+    }
+
+    echo json_encode($decodedResult);
 } catch (Throwable $e) {
     jsonError(500, 'server-error');
 }
